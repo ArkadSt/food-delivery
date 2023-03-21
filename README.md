@@ -10,4 +10,4 @@ such as:
 
 which would calculate the courier delivery fee for cyclists in Tallinn in current weather conditions.
 
-The database is being updated every 15 minutes by default, but you can also set your own schedule by updating the cron expression in Spring's application.properties.
+The database is being updated every 15 minutes by default, but you can also set your own schedule by updating the cron expression in Spring's application.properties (food-delivery/src/main/resources/application.properties).
