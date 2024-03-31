@@ -29,5 +29,6 @@ Some examples:
 
 `curl -X DELETE http://localhost:8080/delete-wpef/Bike/Rain` - deletes a business rule associated with bike couriers in rainy weather
 
+Note that in case of ATEF, WSEF, WPEF if business rule says that extended fee is less that zero, it indicates that in this weather “Usage of selected vehicle type is forbidden”.
 
 The database is being updated every 15 minutes by default, but you can also set your own schedule by updating the cron expression in Spring's application.properties (food-delivery/src/main/resources/application.properties).
