@@ -201,7 +201,7 @@ public class FoodDeliveryService {
     }
 
     /**
-     * Populates empty tables with default business rules
+     * Populates empty tables with default business rules, makes first invocation of getUpdatedWeatherInfo()
      */
     @PostConstruct
     public void populateDatabase(){
@@ -243,6 +243,10 @@ public class FoodDeliveryService {
 
         getUpdatedWeatherInfo();
     }
+
+    /**
+     * Pulls XML, extracts relevant data and saves it to the STATION table of our database
+     */
     @Scheduled(cron = "${cron.expression}")
     public void getUpdatedWeatherInfo() {
         var tuple = XMLParser.parse("https://www.ilmateenistus.ee/ilma_andmed/xml/observations.php", Arrays.asList(TALLINN_WMO_CODE, TARTU_WMO_CODE, PÄRNU_WMO_CODE));

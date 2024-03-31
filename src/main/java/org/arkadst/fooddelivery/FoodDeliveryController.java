@@ -22,21 +22,44 @@ public class FoodDeliveryController {
         this.foodDeliveryService = foodDeliveryService;
     }
 
+    // The following methods receive and manipulate data using web requests
+
+    /**
+     * Get fee based on latest weather data
+     * @param city city
+     * @param vehicle vehicle type
+     * @return fee or error
+     */
     @GetMapping("/get-fee/{city}/{vehicle}")
     public String getFee(@PathVariable String city, @PathVariable String vehicle){
         return foodDeliveryService.getFee(city, vehicle) + '\n';
     }
 
+    /**
+     * Get fee based on weather data at a specific time
+     * @param city city
+     * @param vehicle vehicle type
+     * @param timestamp Epoch timestamp
+     * @return fee or error
+     */
     @GetMapping("/get-fee/{city}/{vehicle}/timestamp/{timestamp}")
     public String getFee(@PathVariable String city, @PathVariable String vehicle, @PathVariable Long timestamp){
         return foodDeliveryService.getFee(city, vehicle, timestamp) + '\n';
     }
 
+    /**
+     * Get fee based on weather data at a specific time
+     * @param city city
+     * @param vehicle vehicle type
+     * @param datetime date and time in ISO-8601 format, such as 2007-12-03T10:15:30
+     * @return fee or error
+     */
     @GetMapping("/get-fee/{city}/{vehicle}/datetime/{datetime}")
     public String getFee(@PathVariable String city, @PathVariable String vehicle, @PathVariable LocalDateTime datetime){
         return foodDeliveryService.getFee(city, vehicle, datetime) + '\n';
     }
 
+    // the following methods submit new / update existing business rules
     @PostMapping("/base-fee")
     public BaseFee newBaseFee(@RequestParam String city, @RequestParam String vehicle, @RequestParam Double fee){
         return foodDeliveryService.saveBaseFee(city, vehicle, fee);
@@ -57,6 +80,7 @@ public class FoodDeliveryController {
         return foodDeliveryService.saveWeatherPhenomenonExtraFee(vehicle, phenomenon, fee);
     }
 
+    // the following methods delete business rules
     @DeleteMapping("/delete-base-fee/{city}/{vehicle}")
     public void deleteBaseFee(@PathVariable String city, @PathVariable String vehicle){
         foodDeliveryService.deleteBaseFee(city, vehicle);
@@ -77,6 +101,7 @@ public class FoodDeliveryController {
         foodDeliveryService.deleteWeatherPhenomenonExtraFee(vehicle, phenomenon);
     }
 
+    // nicer error message on wrong type
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseBody
     public String handleTypeMismatchException(MethodArgumentTypeMismatchException ex) {
