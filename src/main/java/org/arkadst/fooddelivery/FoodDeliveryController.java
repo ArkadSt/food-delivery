@@ -37,12 +37,6 @@ public class FoodDeliveryController {
         return foodDeliveryService.getFee(city, vehicle, datetime) + '\n';
     }
 
-    /*@ExceptionHandler(MethodArgumentTypeMismatchException.class)
-    @ResponseBody
-    public String handleTypeMismatchException(MethodArgumentTypeMismatchException ex) {
-        return "You have entered the wrong type ";
-    }*/
-
     @PostMapping("/base-fee")
     public BaseFee newBaseFee(@RequestParam String city, @RequestParam String vehicle, @RequestParam Double fee){
         return foodDeliveryService.saveBaseFee(city, vehicle, fee);
@@ -83,5 +77,10 @@ public class FoodDeliveryController {
         foodDeliveryService.deleteWeatherPhenomenonExtraFee(vehicle, phenomenon);
     }
 
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseBody
+    public String handleTypeMismatchException(MethodArgumentTypeMismatchException ex) {
+        return "You have entered the wrong type somewhere. Check your request";
+    }
 
 }
