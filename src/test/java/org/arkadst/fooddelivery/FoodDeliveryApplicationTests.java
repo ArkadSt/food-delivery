@@ -10,4 +10,8 @@ class FoodDeliveryApplicationTests {
 	void contextLoads() {
 	}
 
+	@Test
+	void returnsCode200(){
+		
+	}
 }

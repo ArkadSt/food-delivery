@@ -1,174 +1,242 @@
 package org.arkadst.fooddelivery.service;
 
 import jakarta.annotation.PostConstruct;
-import org.arkadst.fooddelivery.model.Station;
-import org.arkadst.fooddelivery.model.StationId;
-import org.arkadst.fooddelivery.repository.StationRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.arkadst.fooddelivery.model.*;
+import org.arkadst.fooddelivery.repository.*;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.w3c.dom.Document;
-import org.w3c.dom.Node;
-import org.w3c.dom.NodeList;
-import org.xml.sax.SAXException;
 
-import javax.xml.parsers.DocumentBuilder;
-import javax.xml.parsers.DocumentBuilderFactory;
-import javax.xml.parsers.ParserConfigurationException;
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.Map;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.*;
 
 @Service
 @EnableScheduling
 public class FoodDeliveryService {
-    @Autowired
-    private final StationRepository stationRepository;
-    private Long timestamp;
 
-    public FoodDeliveryService(StationRepository stationRepository) {
+    private final StationRepository stationRepository;
+    private final BaseFeeRepository baseFeeRepository;
+    private final AirTemperatureExtraFeeRepository airTemperatureExtraFeeRepository;
+    private final WeatherPhenomenonExtraFeeRepository weatherPhenomenonExtraFeeRepository;
+    private final WindSpeedExtraFeeRepository windSpeedExtraFeeRepository;
+    private final int TALLINN_WMO_CODE = 26038;
+    private final int TARTU_WMO_CODE = 26242;
+    private final int PÄRNU_WMO_CODE = 41803;
+    private long current_timestamp;
+    private final Map<String, Integer> CITY_WMO_CODE_MAP;
+
+    public FoodDeliveryService(StationRepository stationRepository, BaseFeeRepository baseFeeRepository, AirTemperatureExtraFeeRepository airTemperatureExtraFeeRepository, WeatherPhenomenonExtraFeeRepository weatherPhenomenonExtraFeeRepository, WindSpeedExtraFeeRepository windSpeedExtraFeeRepository) {
         this.stationRepository = stationRepository;
+        this.baseFeeRepository = baseFeeRepository;
+        this.airTemperatureExtraFeeRepository = airTemperatureExtraFeeRepository;
+        this.weatherPhenomenonExtraFeeRepository = weatherPhenomenonExtraFeeRepository;
+        this.windSpeedExtraFeeRepository = windSpeedExtraFeeRepository;
+
+        CITY_WMO_CODE_MAP = new HashMap<>();
+        CITY_WMO_CODE_MAP.put("tallinn", TALLINN_WMO_CODE);
+        CITY_WMO_CODE_MAP.put("tartu", TARTU_WMO_CODE);
+        CITY_WMO_CODE_MAP.put("pärnu", PÄRNU_WMO_CODE);
+
     }
 
-    public Station get(StationId stationId) {
+    /**
+     * Pulls data from the database based on the StationId candidate key
+     * @param stationId candidate key
+     * @return Station database entry
+     */
+    public Station getStation(StationId stationId) {
         return stationRepository.findById(stationId).orElse(null);
     }
 
-    public void save(String stationName, Integer wmoCode, Double airTemp, Double windSpeed, String weatherPhenomenon, Long timestamp){
-        Station station = new Station();
-        station.setStationName(stationName);
-        station.setAirTemp(airTemp);
-        station.setWindSpeed(windSpeed);
-        station.setWeatherPhenomenon(weatherPhenomenon);
-
-        station.setStationId(new StationId(wmoCode, timestamp));
-
-        stationRepository.save(station);
-    }
 
     public String getFee(String city, String vehicle){
+        return getFee(city, vehicle, current_timestamp);
+    }
+
+    public String getFee(String city, String vehicle, LocalDateTime dateTime){
+        return getFee(city, vehicle, dateTime.atZone(ZoneId.of("Europe/Tallinn")).toEpochSecond());
+    }
+    public String getFee(String city, String vehicle, Long timestamp){
 
         city = city.toLowerCase();
         vehicle = vehicle.toLowerCase();
-        Double fee = 0.0;
+        Double fee = null;
 
-        Map<String, Map<String, Double>> rbfMap = new HashMap<>();
-        Map<String, Double> tallinnMap = new HashMap<>();
-        Map<String, Double> tartuMap = new HashMap<>();
-        Map<String, Double> parnuMap = new HashMap<>();
-
-// Populate the nested HashMaps
-        tallinnMap.put("car", 4.0);
-        tallinnMap.put("scooter", 3.5);
-        tallinnMap.put("bike", 3.0);
-        tartuMap.put("car", 3.5);
-        tartuMap.put("scooter", 3.0);
-        tartuMap.put("bike", 2.5);
-        parnuMap.put("car", 3.0);
-        parnuMap.put("scooter", 2.5);
-        parnuMap.put("bike", 2.0);
-
-// Put the nested HashMaps into the parent HashMap
-        rbfMap.put("tallinn", tallinnMap);
-        rbfMap.put("tartu", tartuMap);
-        rbfMap.put("pärnu", parnuMap);
-
-        fee += rbfMap.get(city).get(vehicle);
-
-        Map<String, StationId> weatherStation = new HashMap<>();
-        weatherStation.put("tallinn", new StationId(26038, timestamp));
-        weatherStation.put("tartu", new StationId(26242, timestamp));
-        weatherStation.put("pärnu", new StationId(41803, timestamp));
-
-        double temperature = get(weatherStation.get(city)).getAirTemp();
-        double windSpeed = get(weatherStation.get(city)).getWindSpeed();
-        String weatherPhenomenon = get(weatherStation.get(city)).getWeatherPhenomenon().toLowerCase();
-
-        if (vehicle.equals("scooter") || vehicle.equals("bike")){
-            if (temperature <= 0 && temperature >= -10){
-                fee += 0.5;
-            } else if (temperature < -10){
-                fee += 1;
-            }
-
-            if (weatherPhenomenon.contains("snow") || weatherPhenomenon.contains("sleet")){
-                fee += 1;
-            }
-            if (weatherPhenomenon.contains("rain")){
-                fee += 0.5;
-            }
-            if (weatherPhenomenon.contains("glaze") || weatherPhenomenon.contains("hail") || weatherPhenomenon.contains("thunder")){
-                return "Usage of selected vehicle type is forbidden";
+        for (BaseFee baseFee : baseFeeRepository.findAll()){
+            if (baseFee.getCity().equals(city) && baseFee.getVehicle().equals(vehicle)){
+                fee = baseFee.getFee();
             }
         }
 
-        if (vehicle.equals("bike")){
-            if (windSpeed >= 10 && windSpeed <= 20){
-                fee += 0.5;
-            } else if (windSpeed > 20){
-                return "Usage of selected vehicle type is forbidden";
+        if (fee == null){
+            return "Wrong city or vehicle type";
+        }
+
+
+        Station station = getStation(new StationId(CITY_WMO_CODE_MAP.get(city), timestamp));
+        if (station == null){
+            return "No database entry associated with this timestamp";
+        }
+
+
+
+        double airTemperature = station.getAirTemp();
+        double windSpeed = station.getWindSpeed();
+        String weatherPhenomenon = station.getWeatherPhenomenon().toLowerCase();
+
+        for (AirTemperatureExtraFee airTemperatureExtraFee : airTemperatureExtraFeeRepository.findAll()){
+            if (airTemperatureExtraFee.getVehicle().equals(vehicle)){
+                if (airTemperatureExtraFee.getIncludeMin() && airTemperatureExtraFee.getIncludeMax()
+                        && airTemperatureExtraFee.getMinTemp() <= airTemperature && airTemperature <= airTemperatureExtraFee.getMaxTemp()
+                        || !airTemperatureExtraFee.getIncludeMin() && airTemperatureExtraFee.getIncludeMax()
+                        && airTemperatureExtraFee.getMinTemp() < airTemperature && airTemperature <= airTemperatureExtraFee.getMaxTemp()
+                        || airTemperatureExtraFee.getIncludeMin() && !airTemperatureExtraFee.getIncludeMax()
+                        && airTemperatureExtraFee.getMinTemp() <= airTemperature && airTemperature < airTemperatureExtraFee.getMaxTemp()
+                        || !airTemperatureExtraFee.getIncludeMin() && !airTemperatureExtraFee.getIncludeMax()
+                        && airTemperatureExtraFee.getMinTemp() < airTemperature && airTemperature < airTemperatureExtraFee.getMaxTemp()){
+                    if (airTemperatureExtraFee.getFee() < 0){
+                        return "Usage of selected vehicle type is forbidden";
+                    } else {
+                        fee += airTemperatureExtraFee.getFee();
+                    }
+                }
             }
         }
 
+        for (WindSpeedExtraFee windSpeedExtraFee : windSpeedExtraFeeRepository.findAll()){
+            if (windSpeedExtraFee.getVehicle().equals(vehicle)){
+                if (windSpeedExtraFee.getIncludeMin() && windSpeedExtraFee.getIncludeMax()
+                && windSpeedExtraFee.getMinWindSpeed() <= windSpeed && windSpeed <= windSpeedExtraFee.getMaxWindSpeed()
+                || !windSpeedExtraFee.getIncludeMin() && windSpeedExtraFee.getIncludeMax()
+                && windSpeedExtraFee.getMinWindSpeed() < windSpeed && windSpeed <= windSpeedExtraFee.getMaxWindSpeed()
+                || windSpeedExtraFee.getIncludeMin() && !windSpeedExtraFee.getIncludeMax()
+                && windSpeedExtraFee.getMinWindSpeed() <= windSpeed && windSpeed < windSpeedExtraFee.getMaxWindSpeed()
+                || !windSpeedExtraFee.getIncludeMin() && !windSpeedExtraFee.getIncludeMax()
+                && windSpeedExtraFee.getMinWindSpeed() < windSpeed && windSpeed < windSpeedExtraFee.getMaxWindSpeed()){
+                    if (windSpeedExtraFee.getFee() < 0){
+                        return "Usage of selected vehicle type is forbidden";
+                    } else {
+                        fee += windSpeedExtraFee.getFee();
+                    }
+                }
+            }
+        }
+
+        for (WeatherPhenomenonExtraFee weatherPhenomenonExtraFee : weatherPhenomenonExtraFeeRepository.findAll()){
+            if (vehicle.equals(weatherPhenomenonExtraFee.getVehicle())){
+                if (weatherPhenomenon.contains(weatherPhenomenonExtraFee.getPhenomenon())){
+                    if (weatherPhenomenonExtraFee.getFee() < 0){
+                        return "Usage of selected vehicle type is forbidden";
+                    } else {
+                        fee += weatherPhenomenonExtraFee.getFee();
+                    }
+                }
+            }
+
+        }
 
         return fee + " EUR";
     }
+
+    // The following methods write new entries to the database
+    public Station saveStation(String stationName, Integer wmoCode, Double airTemp, Double windSpeed, String weatherPhenomenon, Long timestamp){
+        return stationRepository.save(new Station(new StationId(wmoCode, timestamp), stationName, airTemp, windSpeed, weatherPhenomenon));
+    }
+    
+    public BaseFee saveBaseFee(String city, String vehicle, Double fee){
+        return baseFeeRepository.save(new BaseFee(new BaseFeeId(city, vehicle), fee));
+    }
+
+    public AirTemperatureExtraFee saveAirTemperatureExtraFee(String vehicle, double min_temp, double max_temp, Boolean include_min, Boolean include_max, double fee){
+        return airTemperatureExtraFeeRepository.save(new AirTemperatureExtraFee(new AirTemperatureExtraFeeId(vehicle, min_temp, max_temp, include_min, include_max), fee));
+    }
+
+    public WindSpeedExtraFee saveWindSpeedExtraFee(String vehicle, double min_wind_speed, double max_win_speed, Boolean include_min, Boolean include_max, double fee){
+        return windSpeedExtraFeeRepository.save(new WindSpeedExtraFee(new WindSpeedExtraFeeId(vehicle, min_wind_speed, max_win_speed, include_min, include_max), fee));
+    }
+
+    public WeatherPhenomenonExtraFee saveWeatherPhenomenonExtraFee(String vehicle, String phenomenon, double fee){
+        return weatherPhenomenonExtraFeeRepository.save(new WeatherPhenomenonExtraFee(new WeatherPhenomenonExtraFeeId(vehicle, phenomenon), fee));
+    }
+
+    // The following methods delete entries from the database
+
+    public void deleteBaseFee(String city, String vehicle){
+        baseFeeRepository.deleteById(new BaseFeeId(city, vehicle));
+    }
+
+    public void deleteAirTemperatureExtraFee(String vehicle, double min_temp, double max_temp, Boolean include_min, Boolean include_max){
+        airTemperatureExtraFeeRepository.deleteById(new AirTemperatureExtraFeeId(vehicle, min_temp, max_temp, include_min, include_max));
+    }
+
+    public void deleteWindSpeedExtraFee(String vehicle, double min_wind_speed, double max_win_speed, Boolean include_min, Boolean include_max){
+        windSpeedExtraFeeRepository.deleteById(new WindSpeedExtraFeeId(vehicle, min_wind_speed, max_win_speed, include_min, include_max));
+    }
+
+    public void deleteWeatherPhenomenonExtraFee(String vehicle, String phenomenon){
+        weatherPhenomenonExtraFeeRepository.deleteById(new WeatherPhenomenonExtraFeeId(vehicle, phenomenon));
+    }
+
+    /**
+     * Populates tables with default business rules if they are empty
+     */
     @PostConstruct
-    @Scheduled(cron = "${cron.expression}")
-    public void pullFromDatabase(){
-        try {
-            DocumentBuilder builder = DocumentBuilderFactory.newInstance().newDocumentBuilder();
-            Document doc = builder.parse("https://www.ilmateenistus.ee/ilma_andmed/xml/observations.php");
-            doc.getDocumentElement().normalize();
-            timestamp = Long.parseLong(doc.getElementsByTagName("observations").item(0).getAttributes().item(0).getNodeValue());
-            NodeList allNodeList = doc.getElementsByTagName("station");
-
-            System.out.println(timestamp);
-            loop0:
-            for (int i = 0; i < allNodeList.getLength(); i++) {
-                Node stationNode = allNodeList.item(i);
-                NodeList nodeList = stationNode.getChildNodes();
-
-                String stationName = null, weatherPhenomenon = null;
-                Integer wmoCode = null;
-                Double airTemp = null, windSpeed = null;
-
-                for (int j = 0; j < nodeList.getLength(); j++) {
-                    Node node = nodeList.item(j);
-                    String name = node.getNodeName();
-                    String value = node.getTextContent();
-
-                    try {
-                        if (node.getNodeType() == Node.ELEMENT_NODE) {
-                            switch (name) {
-                                case "name" -> {
-                                    if (!value.equals("Tallinn-Harku") && !value.equals("Tartu-Tõravere") && !value.equals("Pärnu"))
-                                        continue loop0;
-                                    stationName = value;
-                                }
-                                case "wmocode" -> wmoCode = Integer.parseInt(value);
-                                case "airtemperature" -> airTemp = Double.parseDouble(value);
-                                case "windspeed" -> windSpeed = Double.parseDouble(value);
-                                case "phenomenon" -> weatherPhenomenon = value;
-                                default -> {
-                                    continue;
-                                }
-                            }
-                            System.out.println(name + " " + value);
-                        }
-
-                    } catch (NumberFormatException ignore){}
-
-                }
-
-
-                save(stationName, wmoCode, airTemp, windSpeed, weatherPhenomenon, timestamp);
-
-            }
-        } catch (ParserConfigurationException | IOException | SAXException e) {
-            System.out.println(e.getMessage());
+    public void populateDatabase(){
+        if (baseFeeRepository.count() == 0){
+            saveBaseFee("Tallinn", "Car", 4.0);
+            saveBaseFee("Tallinn", "Scooter", 3.5);
+            saveBaseFee("Tallinn", "Bike", 3.0);
+            saveBaseFee("Tartu", "Car", 3.5);
+            saveBaseFee("Tartu", "Scooter", 3.0);
+            saveBaseFee("Tartu", "Bike", 2.5);
+            saveBaseFee("Pärnu", "Car", 3.0);
+            saveBaseFee("Pärnu", "Scooter", 2.5);
+            saveBaseFee("Pärnu", "Bike", 2.0);
         }
+
+        if (airTemperatureExtraFeeRepository.count() == 0){
+            for (String vehicle : new String[]{"Scooter", "Bike"}) {
+                saveAirTemperatureExtraFee(vehicle, Double.NEGATIVE_INFINITY, -10, false, false, 1);
+                saveAirTemperatureExtraFee(vehicle, -10, 0, true, true, 0.5);
+            }
+
+        }
+
+        if (windSpeedExtraFeeRepository.count() == 0){
+            saveWindSpeedExtraFee("Bike", 10, 20, true, true, 0.5);
+            saveWindSpeedExtraFee("Bike", 20, Double.POSITIVE_INFINITY, false, false, -1.0);
+        }
+
+        if (weatherPhenomenonExtraFeeRepository.count() == 0){
+            for (String vehicle : new String[]{"Scooter", "Bike"}){
+                saveWeatherPhenomenonExtraFee(vehicle, "snow", 1.0);
+                saveWeatherPhenomenonExtraFee(vehicle, "sleet", 1.0);
+                saveWeatherPhenomenonExtraFee(vehicle, "rain", 0.5);
+                saveWeatherPhenomenonExtraFee(vehicle, "glaze", -1.0);
+                saveWeatherPhenomenonExtraFee(vehicle, "hail", -1.0);
+                saveWeatherPhenomenonExtraFee(vehicle, "thunder", -1.0);
+            }
+        }
+
+        getUpdatedWeatherInfo();
+    }
+    @Scheduled(cron = "${cron.expression}")
+    public void getUpdatedWeatherInfo() {
+        var tuple = XMLParser.parse("https://www.ilmateenistus.ee/ilma_andmed/xml/observations.php", Arrays.asList(TALLINN_WMO_CODE, TARTU_WMO_CODE, PÄRNU_WMO_CODE));
+        current_timestamp = tuple.first();
+        var stations = tuple.second();
+
+        for (Map<String, String> station : stations) {
+            String stationName = station.get("name");
+            int wmoCode = Integer.parseInt(station.get("wmocode"));
+            double airTemp = Double.parseDouble(station.get("airtemperature"));
+            double windSpeed = Double.parseDouble(station.get("windspeed"));
+            String weatherPhenomenon = station.get("phenomenon");
+
+            saveStation(stationName, wmoCode, airTemp, windSpeed, weatherPhenomenon, current_timestamp);
+        }
+
     }
 
 }

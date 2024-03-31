@@ -1,11 +1,13 @@
 package org.arkadst.fooddelivery.model;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 
 import java.io.Serializable;
 
 @Embeddable
 public class StationId implements Serializable {
+
     private Integer wmoCode;
     private Long timestamp;
 
