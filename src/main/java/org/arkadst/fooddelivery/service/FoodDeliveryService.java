@@ -50,13 +50,15 @@ public class FoodDeliveryService {
     }
 
 
-    public String getFee(String city, String vehicle){
-        return getFee(city, vehicle, current_timestamp);
-    }
 
-    public String getFee(String city, String vehicle, LocalDateTime dateTime){
-        return getFee(city, vehicle, dateTime.atZone(ZoneId.of("Europe/Tallinn")).toEpochSecond());
-    }
+
+    /**
+     * Calculates delivery fee which is return
+     * @param city city name
+     * @param vehicle vehicle type
+     * @param timestamp Epoch timestamp
+     * @return delivery fee in the form X.XX EUR or an error message
+     */
     public String getFee(String city, String vehicle, Long timestamp){
 
         city = city.toLowerCase();
@@ -139,6 +141,27 @@ public class FoodDeliveryService {
         return fee + " EUR";
     }
 
+    /**
+     * Runs getFee using the latest recorded timestamp
+     * @param city city
+     * @param vehicle vehicle
+     * @return fee or error
+     */
+    public String getFee(String city, String vehicle){
+        return getFee(city, vehicle, current_timestamp);
+    }
+
+    /**
+     * Takes datetime of type LocalDateTime, converts it to Epoch time and then runs getFee
+     * @param city vity
+     * @param vehicle vehicle
+     * @param dateTime date and time
+     * @return fee or error
+     */
+    public String getFee(String city, String vehicle, LocalDateTime dateTime){
+        return getFee(city, vehicle, dateTime.atZone(ZoneId.of("Europe/Tallinn")).toEpochSecond());
+    }
+
     // The following methods write new entries to the database
     public Station saveStation(String stationName, Integer wmoCode, Double airTemp, Double windSpeed, String weatherPhenomenon, Long timestamp){
         return stationRepository.save(new Station(new StationId(wmoCode, timestamp), stationName, airTemp, windSpeed, weatherPhenomenon));
@@ -161,7 +184,6 @@ public class FoodDeliveryService {
     }
 
     // The following methods delete entries from the database
-
     public void deleteBaseFee(String city, String vehicle){
         baseFeeRepository.deleteById(new BaseFeeId(city, vehicle));
     }
@@ -179,7 +201,7 @@ public class FoodDeliveryService {
     }
 
     /**
-     * Populates tables with default business rules if they are empty
+     * Populates empty tables with default business rules
      */
     @PostConstruct
     public void populateDatabase(){
